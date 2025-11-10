@@ -1,0 +1,27 @@
+# name: test/sql/fquack.test
+# description: test fquack extension
+# group: [quack]
+
+# Before we load the extension, this will fail
+statement error
+SELECT fquack('Sam');
+----
+Invalid Input Error:
+No such file or directory (os error 2)
+
+# Require statement will ensure the extension is loaded from now on
+require fquack
+
+require icu
+
+# Confirm the extension works
+query I
+SELECT * from fquack('./test.fastq');
+----
+┌──────────┬──────────┬─────────┐
+│ metadata │ sequence │ quality │
+│ varchar  │ varchar  │ varchar │
+├──────────┼──────────┼─────────┤
+│ read1    │ ACGT     │ !!!!    │
+│ read2    │ TTGC     │ ####    │
+└──────────┴──────────┴─────────┘🐥

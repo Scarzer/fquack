@@ -22,7 +22,7 @@ use seq_io::fastq::{self, Record};
 macro_rules! debug_print {
     ($($arg:tt)*) => {
         if std::env::var("DEBUG").is_ok() {
-            eprintln!("[PCAP Debug] {}", format!($($arg)*));
+            eprintln!("[FQuack Debug] {}", format!($($arg)*));
         }
     };
 }
@@ -68,6 +68,8 @@ impl VTab for FastQVTab {
     fn func(func: &TableFunctionInfo<Self>, output: &mut DataChunkHandle) -> Result<(), Box<dyn std::error::Error>> {
         let init_data = func.get_init_data();
         let _bind_data = func.get_bind_data();
+
+        debug_print!("Starting func call");
         
         if init_data.done.load(Ordering::SeqCst) {
             return Ok(());
