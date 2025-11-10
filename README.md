@@ -84,3 +84,10 @@ make test_debug
 ```
 
 Ensure that `TARGET_DUCKDB_VERSION` in `Makefile` matches the DuckDB crate versions in `Cargo.toml` to avoid ABI mismatches.
+
+## Inspiration
+This extension is based off the [rust extension template](https://github.com/duckdb/extension-template-rs) and draws heavily from the following projects:
+- [fqkit](https://github.com/BioinfoToolbox/fqkit/tree/main)
+- [pcap_reader_bfe](https://github.com/Overdrive83/pcap_reader_bfe/tree/main)
+- [duckdb-file-tools](https://github.com/nicad/duckdb-file-tools/blob/main/src/lib.rs)
+- [seq_io](https://docs.rs/seq_io/latest/seq_io/#example-fastq-parser)
