@@ -9,51 +9,86 @@ use duckdb::{
 };
 use duckdb_loadable_macros::duckdb_entrypoint_c_api;
 use libduckdb_sys as ffi;
+use std::fs::File;
 use std::{
     error::Error,
-    ffi::CString,
     sync::atomic::{AtomicBool, Ordering},
 };
 
+use std::sync::{Arc, Mutex};
+use seq_io::fastq::{self, Record};
+
 #[repr(C)]
-struct HelloBindData {
-    name: String,
+struct FastQBindData {
+    filename: String,
 }
 
 #[repr(C)]
-struct HelloInitData {
+struct FastQInitData {
+    reader: Arc<Mutex<fastq::Reader<File>>>,
     done: AtomicBool,
 }
 
-struct HelloVTab;
+struct FastQVTab;
 
-impl VTab for HelloVTab {
-    type InitData = HelloInitData;
-    type BindData = HelloBindData;
+impl VTab for FastQVTab {
+    type InitData = FastQInitData;
+    type BindData = FastQBindData;
 
     fn bind(bind: &BindInfo) -> Result<Self::BindData, Box<dyn std::error::Error>> {
-        bind.add_result_column("column0", LogicalTypeHandle::from(LogicalTypeId::Varchar));
-        let name = bind.get_parameter(0).to_string();
-        Ok(HelloBindData { name })
+        bind.add_result_column("metadata", LogicalTypeHandle::from(LogicalTypeId::Varchar));
+        bind.add_result_column("sequence", LogicalTypeHandle::from(LogicalTypeId::Varchar));
+        bind.add_result_column("quality", LogicalTypeHandle::from(LogicalTypeId::Varchar));
+
+        let filename = bind.get_parameter(0).to_string();
+        Ok(FastQBindData { filename })
     }
 
-    fn init(_: &InitInfo) -> Result<Self::InitData, Box<dyn std::error::Error>> {
-        Ok(HelloInitData {
+    fn init(info: &InitInfo) -> Result<Self::InitData, Box<dyn std::error::Error>> {
+        let bind_data = info.get_bind_data::<FastQBindData>();
+        let filename = unsafe { (*bind_data).filename.clone() };
+
+        let reader = fastq::Reader::from_path(&filename)?;
+
+        Ok(FastQInitData {
+            reader: Arc::new(Mutex::new(reader)),
             done: AtomicBool::new(false),
         })
     }
 
     fn func(func: &TableFunctionInfo<Self>, output: &mut DataChunkHandle) -> Result<(), Box<dyn std::error::Error>> {
         let init_data = func.get_init_data();
-        let bind_data = func.get_bind_data();
-        if init_data.done.swap(true, Ordering::Relaxed) {
-            output.set_len(0);
-        } else {
-            let vector = output.flat_vector(0);
-            let result = CString::new(format!("Rusty Quack {} 🐥", bind_data.name))?;
-            vector.insert(0, result);
-            output.set_len(1);
+        let _bind_data = func.get_bind_data();
+        
+        if init_data.done.load(Ordering::SeqCst) {
+            return Ok(());
         }
+
+        let mut reader_guard = match init_data.reader.lock() {
+            Ok(guard) => guard,
+            Err(_) => return Err("Failed to lock reader".into()),
+        };
+
+        let mut num_records = 0;
+        while let Some(record) = reader_guard.next() {
+            let record = record?;
+
+            let id = String::from_utf8_lossy(record.id_bytes()).to_string();
+            let seq = String::from_utf8_lossy(record.seq()).to_string();
+            let qual = String::from_utf8_lossy(record.qual()).to_string();
+
+            output.flat_vector(0).insert(num_records, id.as_str());
+            output.flat_vector(1).insert(num_records, seq.as_str());
+            output.flat_vector(2).insert(num_records, qual.as_str());
+
+            num_records += 1;
+        }
+
+        if num_records == 0 {
+            init_data.done.store(true, Ordering::SeqCst);
+        }
+
+        output.set_len(num_records);
         Ok(())
     }
 
@@ -66,7 +101,7 @@ const EXTENSION_NAME: &str = env!("CARGO_PKG_NAME");
 
 #[duckdb_entrypoint_c_api()]
 pub unsafe fn extension_entrypoint(con: Connection) -> Result<(), Box<dyn Error>> {
-    con.register_table_function::<HelloVTab>(EXTENSION_NAME)
+    con.register_table_function::<FastQVTab>(EXTENSION_NAME)
         .expect("Failed to register hello table function");
     Ok(())
 }
