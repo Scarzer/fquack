@@ -1,116 +1,86 @@
-# DuckDB Rust extension template
-This is an **experimental** template for Rust based extensions based on the C Extension API of DuckDB. The goal is to
-turn this eventually into a stable basis for pure-Rust DuckDB extensions that can be submitted to the Community extensions
-repository
+# fquack
 
-Features:
-- No DuckDB build required
-- No C++ or C code required
-- CI/CD chain preconfigured
-- (Coming soon) Works with community extensions
+`fquack` is a DuckDB loadable extension written in Rust that streams FASTQ reads into analytical workflows. It registers a single table function, `fquack(path)`, that returns one row per FASTQ record with columns for read metadata, nucleotide sequence, and ASCII-encoded quality scores.
 
-## Cloning
+This library is early development and my way of exploring Rust and expanding my understanding of DuckDB. **Use at your own risk (For now)**! 
 
-Clone the repo with submodules
+## Features
+- Uses DuckDB's virtual table API (`duckdb` crate with `vtab-loadable` feature) so queries can treat reads as relational data.
+- Packages the compiled shared library into a `.duckdb_extension` artifact for easy loading from DuckDB shells or applications.
 
-```shell
-git clone --recurse-submodules <repo>
+## Prerequisites
+- Rust toolchain (1.74 or newer recommended).
+- Python 3 with `venv` support.
+- GNU Make.
+- DuckDB (for running queries against the extension).
+
+Clone the repository with submodules:
+
+```sh
+git clone --recurse-submodules git@github.com:Scarzer/fquack.git
+cd fquack
 ```
 
-## Dependencies
-In principle, these extensions can be compiled with the Rust toolchain alone. However, this template relies on some additional
-tooling to make life a little easier and to be able to share CI/CD infrastructure with extension templates for other languages:
+## Build and Package
+1. Configure the workspace (installs the DuckDB SQLLogic harness and records the host platform):
+	```sh
+	make configure
+	```
+2. Build a debug extension artifact:
+	```sh
+	make debug
+	```
+	The packaged binary is written to `build/debug/extension/fquack/fquack.duckdb_extension`.
+3. For an optimized artifact, run:
+	```sh
+	make release
+	```
+	The release build is placed in `build/release/extension/fquack/`.
 
-- Python3
-- Python3-venv
-- [Make](https://www.gnu.org/software/make)
-- Git
-
-Installing these dependencies will vary per platform:
-- For Linux, these come generally pre-installed or are available through the distro-specific package manager.
-- For MacOS, [homebrew](https://formulae.brew.sh/).
-- For Windows, [chocolatey](https://community.chocolatey.org/).
-
-## Building
-After installing the dependencies, building is a two-step process. Firstly run:
-```shell
-make configure
-```
-This will ensure a Python venv is set up with DuckDB and DuckDB's test runner installed. Additionally, depending on configuration,
-DuckDB will be used to determine the correct platform for which you are compiling.
-
-Then, to build the extension run:
-```shell
-make debug
-```
-This delegates the build process to cargo, which will produce a shared library in `target/debug/<shared_lib_name>`. After this step,
-a script is run to transform the shared library into a loadable extension by appending a binary footer. The resulting extension is written
-to the `build/debug` directory.
-
-To create optimized release binaries, simply run `make release` instead.
-
-### Running the extension
-To run the extension code, start `duckdb` with `-unsigned` flag. This will allow you to load the local extension file.
+## Loading the Extension in DuckDB
+Launch DuckDB with unsigned extensions enabled, load the local artifact, and query a FASTQ file.
 
 ```sh
 duckdb -unsigned
 ```
 
-After loading the extension by the file path, you can use the functions provided by the extension (in this case, `rusty_quack()`).
+```sql
+LOAD './build/debug/extension/fquack/fquack.duckdb_extension';
+```
+
+Create a tiny sample FASTQ (optional) and query it:
+
+```sh
+cat <<'EOF' > example.fastq
+@read1
+ACGT
++
+!!!!
+@read2
+TTGC
++
+####
+EOF
+```
 
 ```sql
-LOAD './build/debug/extension/rusty_quack/rusty_quack.duckdb_extension';
-SELECT * FROM rusty_quack('Jane');
+SELECT metadata, sequence, quality
+FROM fquack('example.fastq');
 ```
 
-```
-┌─────────────────────┐
-│       column0       │
-│       varchar       │
-├─────────────────────┤
-│ Rusty Quack Jane 🐥 │
-└─────────────────────┘
-```
+Output columns:
+- `metadata`: FASTQ identifier (text after the leading `@`).
+- `sequence`: nucleotide string (A/C/G/T/N).
+- `quality`: ASCII-encoded quality scores as stored in the file.
 
-## Testing
-This extension uses the DuckDB Python client for testing. This should be automatically installed in the `make configure` step.
-The tests themselves are written in the SQLLogicTest format, just like most of DuckDB's tests. A sample test can be found in
-`test/sql/<extension_name>.test`. To run the tests using the *debug* build:
+## Switching DuckDB Versions
+To target a different DuckDB binary:
 
-```shell
-make test_debug
-```
-
-or for the *release* build:
-```shell
-make test_release
-```
-
-### Version switching
-Testing with different DuckDB versions is really simple:
-
-First, run
-```
+```sh
 make clean_all
-```
-to ensure the previous `make configure` step is deleted.
-
-Then, run
-```
 DUCKDB_TEST_VERSION=v1.3.2 make configure
-```
-to select a different duckdb version to test with
-
-Finally, build and test with
-```
 make debug
 make test_debug
 ```
 
-### Known issues
-This is a bit of a footgun, but the extensions produced by this template may (or may not) be broken on windows on python3.11
-with the following error on extension load:
-```shell
-IO Error: Extension '<name>.duckdb_extension' could not be loaded: The specified module could not be found
-```
-This was resolved by using python 3.12
+Ensure that `TARGET_DUCKDB_VERSION` in `Makefile` matches the DuckDB crate versions in `Cargo.toml` to avoid ABI mismatches.

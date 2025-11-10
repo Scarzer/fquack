@@ -18,6 +18,15 @@ use std::{
 use std::sync::{Arc, Mutex};
 use seq_io::fastq::{self, Record};
 
+#[allow(dead_code)]
+macro_rules! debug_print {
+    ($($arg:tt)*) => {
+        if std::env::var("DEBUG").is_ok() {
+            eprintln!("[PCAP Debug] {}", format!($($arg)*));
+        }
+    };
+}
+
 #[repr(C)]
 struct FastQBindData {
     filename: String,
@@ -82,6 +91,7 @@ impl VTab for FastQVTab {
             output.flat_vector(2).insert(num_records, qual.as_str());
 
             num_records += 1;
+            debug_print!("Inserted record {}", num_records);
         }
 
         if num_records == 0 {
@@ -102,6 +112,6 @@ const EXTENSION_NAME: &str = env!("CARGO_PKG_NAME");
 #[duckdb_entrypoint_c_api()]
 pub unsafe fn extension_entrypoint(con: Connection) -> Result<(), Box<dyn Error>> {
     con.register_table_function::<FastQVTab>(EXTENSION_NAME)
-        .expect("Failed to register hello table function");
+        .expect("Failed to register fastq table function");
     Ok(())
 }

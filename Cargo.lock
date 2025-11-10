@@ -567,6 +567,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
+name = "fquack"
+version = "0.1.0"
+dependencies = [
+ "duckdb",
+ "duckdb-loadable-macros",
+ "libduckdb-sys",
+ "paraseq",
+ "seq_io",
+]
+
+[[package]]
 name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1185,17 +1196,6 @@ name = "rustversion"
 version = "1.0.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
-
-[[package]]
-name = "rusty_quack"
-version = "0.1.0"
-dependencies = [
- "duckdb",
- "duckdb-loadable-macros",
- "libduckdb-sys",
- "paraseq",
- "seq_io",
-]
 
 [[package]]
 name = "ryu"
